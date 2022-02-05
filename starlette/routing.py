@@ -103,6 +103,7 @@ def replace_params(
 PARAM_REGEX = re.compile("{([a-zA-Z_][a-zA-Z0-9_]*)(:[a-zA-Z_][a-zA-Z0-9_]*)?}")
 
 
+# read: 暂时不看（正则不想看）
 def compile_path(
     path: str,
 ) -> typing.Tuple[typing.Pattern, str, typing.Dict[str, Convertor]]:
@@ -182,6 +183,8 @@ class BaseRoute:
         await self.handle(scope, receive, send)
 
 
+# read: 路由函数 routers = [route(...), route(...)]
+# endpoints: handle 路由的 func
 class Route(BaseRoute):
     def __init__(
         self,
@@ -199,6 +202,7 @@ class Route(BaseRoute):
         self.include_in_schema = include_in_schema
 
         endpoint_handler = endpoint
+        # read: 根据 handler 的类型处理（func 或者 method 的话转换为 asgi app 先）
         while isinstance(endpoint_handler, functools.partial):
             endpoint_handler = endpoint_handler.func
         if inspect.isfunction(endpoint_handler) or inspect.ismethod(endpoint_handler):
@@ -217,6 +221,7 @@ class Route(BaseRoute):
             if "GET" in self.methods:
                 self.methods.add("HEAD")
 
+        # read: 对路由的解析用正则匹配
         self.path_regex, self.path_format, self.param_convertors = compile_path(path)
 
     def matches(self, scope: Scope) -> typing.Tuple[Match, Scope]:
@@ -248,7 +253,9 @@ class Route(BaseRoute):
         assert not remaining_params
         return URLPath(path=path, protocol="http")
 
+    # read: endpoint 到 handler func
     async def handle(self, scope: Scope, receive: Receive, send: Send) -> None:
+        # read: method not allowed
         if self.methods and scope["method"] not in self.methods:
             headers = {"Allow": ", ".join(self.methods)}
             if "app" in scope:
@@ -530,6 +537,7 @@ class _DefaultLifespan:
         return self
 
 
+# read: 路由设计
 class Router:
     def __init__(
         self,
@@ -638,6 +646,7 @@ class Router:
         else:
             await send({"type": "lifespan.shutdown.complete"})
 
+    # read: 路由调用（ASGI 接口实现）
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """
         The main entry point to the Router class.
@@ -653,12 +662,15 @@ class Router:
 
         partial = None
 
+        # read: handle 路由到不同的 func
         for route in self.routes:
             # Determine if any route matches the incoming scope,
             # and hand over to the matching route if found.
             match, child_scope = route.matches(scope)
+            # read: 命中路由
             if match == Match.FULL:
                 scope.update(child_scope)
+                # read: 交给具体的 func 去 handle
                 await route.handle(scope, receive, send)
                 return
             elif match == Match.PARTIAL and partial is None:
@@ -673,6 +685,7 @@ class Router:
             await partial.handle(scope, receive, send)
             return
 
+        # read: redirect slash
         if scope["type"] == "http" and self.redirect_slashes and scope["path"] != "/":
             redirect_scope = dict(scope)
             if scope["path"].endswith("/"):
@@ -726,6 +739,7 @@ class Router:
         route = WebSocketRoute(path, endpoint=endpoint, name=name)
         self.routes.append(route)
 
+    # read: @route 装饰器
     def route(
         self,
         path: str,

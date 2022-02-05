@@ -11,6 +11,7 @@ from starlette.routing import BaseRoute, Router
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 
+# read: 开始看代码了！！！
 class Starlette:
     """
     Creates an application instance.
@@ -82,7 +83,9 @@ class Starlette:
                 error_handler = value
             else:
                 exception_handlers[key] = value
-
+        # read: middleware 就是个元组顺序
+        # 默认加了 500 server error 和 exception的处理
+        # ServerErrorMiddleware本质上也是个 ASGI app，只不过在error 的时候进行了处理（比如 debug=False）不暴露错误
         middleware = (
             [Middleware(ServerErrorMiddleware, handler=error_handler, debug=debug)]
             + self.user_middleware
@@ -94,6 +97,7 @@ class Starlette:
         )
 
         app = self.router
+        # read: 依次调用 middleware stack: ServerError-->user_middleware-->ExceptionMiddleware --> router
         for cls, options in reversed(middleware):
             app = cls(app=app, **options)
         return app
@@ -114,8 +118,10 @@ class Starlette:
     def url_path_for(self, name: str, **path_params: typing.Any) -> URLPath:
         return self.router.url_path_for(name, **path_params)
 
+    # read: __call__ 实现了 ASGI 要求的 application app(scope, receive, send)
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         scope["app"] = self
+        # read: 挂载中间件
         await self.middleware_stack(scope, receive, send)
 
     # The following usages are now discouraged in favour of configuration
